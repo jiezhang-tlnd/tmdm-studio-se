@@ -27,6 +27,7 @@ import org.eclipse.emf.common.util.EList;
 import org.eclipse.xsd.XSDAnnotation;
 import org.eclipse.xsd.XSDComplexTypeContent;
 import org.eclipse.xsd.XSDComplexTypeDefinition;
+import org.eclipse.xsd.XSDConcreteComponent;
 import org.eclipse.xsd.XSDElementDeclaration;
 import org.eclipse.xsd.XSDIdentityConstraintDefinition;
 import org.eclipse.xsd.XSDModelGroup;
@@ -365,6 +366,46 @@ public class XSDUtil {
         }
 
         return entity2xpaths;
+    }
+
+    public static XSDComplexTypeDefinition getContainerTypeOfField(XSDParticle field) {
+        if (field == null) {
+            return null;
+        }
+
+        XSDConcreteComponent modelGroup = field.getContainer();
+        XSDConcreteComponent particle = modelGroup.getContainer();
+        XSDConcreteComponent complexType = particle.getContainer();
+        XSDComplexTypeDefinition complexTypedef = (XSDComplexTypeDefinition) complexType;
+
+        return complexTypedef;
+    }
+
+    /**
+     * check if <b>ctypeDef</b> has been used for <b>concept</b>'s type (concept.getTypeDefinition()) 
+     */
+    public static boolean hasBoundToConcept(XSDComplexTypeDefinition ctypeDef, XSDElementDeclaration concept) {
+        XSDComplexTypeDefinition typeDefinition = (XSDComplexTypeDefinition) concept.getTypeDefinition();
+        if (typeDefinition == ctypeDef) {
+            return true;
+        }
+
+        if (!isAnonymousType(ctypeDef) && !isAnonymousType(typeDefinition)) {
+            List<XSDComplexTypeDefinition> superComplexTypes = Util.getAllSuperComplexTypes(typeDefinition);
+            if (superComplexTypes.contains(ctypeDef)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static boolean isAnonymousType(XSDTypeDefinition typedef) {
+        if (typedef instanceof XSDComplexTypeDefinition) {
+            return ((XSDComplexTypeDefinition) typedef).getName() == null;
+        }
+
+        return false;
     }
 
     public static boolean isValidatedXSDDate(String newText) {

@@ -12,8 +12,14 @@
 // ============================================================================
 package com.amalto.workbench.utils;
 
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -410,6 +416,85 @@ public class XSDUtilTest {
         List<String> allPKXpaths = XSDUtil.getAllPKXpaths(xsdSchema);
         assertTrue(allPKXpaths.size() == 6);
         assertTrue(allPKXpaths.containsAll(resultXpaths));
+    }
+
+    @Test
+    public void testGetContainerTypeOfField() throws Exception {
+        String fileName = "TestCategory03.xsd"; //$NON-NLS-1$
+        String xsdString = TestUtil.readTestResource(XSDUtilTest.this.getClass(), fileName);
+        XSDSchema xsdSchema = Util.getXSDSchema(xsdString);
+        EList<XSDElementDeclaration> elementDeclarations = xsdSchema.getElementDeclarations();
+        for (XSDElementDeclaration concept : elementDeclarations) {
+            XSDComplexTypeDefinition type = (XSDComplexTypeDefinition)concept.getTypeDefinition();
+            if (type.getContent() instanceof XSDParticle) {
+                XSDParticle particle = (XSDParticle) type.getContent();
+                if (particle.getTerm() instanceof XSDModelGroup) {
+                    XSDModelGroup group = (XSDModelGroup) particle.getTerm();
+                    EList<XSDParticle> elist = group.getContents();
+                    assertSame(type, XSDUtil.getContainerTypeOfField(elist.get(0)));// assert
+                }
+            }
+        }
+    }
+
+    @Test
+    public void testIsAnonymousType() throws Exception {
+        String fileName = "TestCategory03.xsd"; //$NON-NLS-1$
+        String xsdString = TestUtil.readTestResource(XSDUtilTest.this.getClass(), fileName);
+        XSDSchema xsdSchema = Util.getXSDSchema(xsdString);
+
+        EList<XSDElementDeclaration> elementDeclarations = xsdSchema.getElementDeclarations();
+        for (XSDElementDeclaration concept : elementDeclarations) {
+            XSDComplexTypeDefinition ctypeDef = (XSDComplexTypeDefinition) concept.getTypeDefinition();
+            if (ctypeDef.getName() == null) {
+                assertTrue(XSDUtil.isAnonymousType(ctypeDef));
+            } else {
+                assertFalse(XSDUtil.isAnonymousType(ctypeDef));
+            }
+        }
+    }
+
+    @Test
+    public void testHasBoundToConcept() throws Exception {
+        String fileName = "TestCategory03.xsd"; //$NON-NLS-1$
+        String xsdString = TestUtil.readTestResource(XSDUtilTest.this.getClass(), fileName);
+        XSDSchema xsdSchema = Util.getXSDSchema(xsdString);
+
+        XSDComplexTypeDefinition typeO = null, typeA = null, typeB = null;
+        EList<XSDTypeDefinition> typeDefinitions = xsdSchema.getTypeDefinitions();
+        for (XSDTypeDefinition type : typeDefinitions) {
+            if (type instanceof XSDComplexTypeDefinition) {
+                if (type.getName().equals("CType")) {
+                    typeO = (XSDComplexTypeDefinition) type;
+                } else if (type.getName().equals("CTypeA")) {
+                    typeA = (XSDComplexTypeDefinition) type;
+                } else if (type.getName().equals("CTypeB")) {
+                    typeB = (XSDComplexTypeDefinition) type;
+                }
+            }
+        }
+
+        XSDElementDeclaration conceptA = null, conceptB = null, conceptC = null;
+        EList<XSDElementDeclaration> elementDeclarations = xsdSchema.getElementDeclarations();
+        for (XSDElementDeclaration concept : elementDeclarations) {
+            if (concept.getName().equals("EntityA")) {
+                conceptA = concept;
+            } else if (concept.getName().equals("EntityB")) {
+                conceptB = concept;
+            } else if (concept.getName().equals("EntityC")) {
+                conceptC = concept;
+            }
+        }
+
+        assertTrue(XSDUtil.hasBoundToConcept(typeO, conceptA));
+        assertTrue(XSDUtil.hasBoundToConcept(typeO, conceptB));
+        assertTrue(XSDUtil.hasBoundToConcept(typeA, conceptA));
+        assertTrue(XSDUtil.hasBoundToConcept(typeA, conceptB));
+        assertFalse(XSDUtil.hasBoundToConcept(typeB, conceptA));
+        assertTrue(XSDUtil.hasBoundToConcept(typeB, conceptB));
+        assertFalse(XSDUtil.hasBoundToConcept(typeO, conceptC));
+        assertFalse(XSDUtil.hasBoundToConcept(typeA, conceptC));
+        assertFalse(XSDUtil.hasBoundToConcept(typeB, conceptC));
     }
 
     @Test
