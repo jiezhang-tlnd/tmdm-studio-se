@@ -39,6 +39,7 @@ public class PasswordUtil {
                     return decryptedPassword;
                 } catch (Exception e) {
                     LOGGER.error(e.getMessage(), e);
+                    return null;
                 }
             } else if (algorithm.equals(ALGORITHM_COMMON) || algorithm.equals(ALGORITHM_COMMON_V2)) {
                 // not support ALGORITHM_COMMON and ALGORITHM_COMMON_V2 ,it will be upgraded by migration task
@@ -73,6 +74,7 @@ public class PasswordUtil {
                             .encrypt(plainPassword);
                 } catch (Exception e) {
                     LOGGER.error(e.getMessage(), e);
+                    return null;
                 }
             } else if (algorithm.equals(ALGORITHM_COMMON) || algorithm.equals(ALGORITHM_COMMON_V2)) {
                 // not support ALGORITHM_COMMON and ALGORITHM_COMMON_V2,it will be upgraded by migration task
@@ -95,21 +97,5 @@ public class PasswordUtil {
         enbytes = base64.encode(plainPassword.getBytes());
         encodeStr = new String(enbytes);
         return encodeStr;
-    }
-
-    public static void main(String args[]) {
-        Base64 base64 = new Base64();
-        String str = "qwe";//$NON-NLS-1$
-        byte[] enbytes = null;
-        String encodeStr = null;
-        byte[] debytes = null;
-        String decodeStr = null;
-        enbytes = base64.encode(str.getBytes());
-        encodeStr = new String(enbytes);
-        debytes = base64.decode(enbytes);
-        decodeStr = new String(debytes);
-        System.out.println("plain password:" + str); //$NON-NLS-1$
-        System.out.println("encrypted password:" + encodeStr); //$NON-NLS-1$
-        System.out.println("decrypted password:" + decodeStr); //$NON-NLS-1$
     }
 }
