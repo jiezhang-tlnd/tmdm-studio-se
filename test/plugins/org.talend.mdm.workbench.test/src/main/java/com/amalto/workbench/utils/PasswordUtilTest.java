@@ -1,3 +1,15 @@
+// ============================================================================
+//
+// Copyright (C) 2006-2019 Talend Inc. - www.talend.com
+//
+// This source code is available under agreement available at
+// %InstallDIR%\features\org.talend.rcp.branding.%PRODUCTNAME%\%PRODUCTNAME%license.txt
+//
+// You should have received a copy of the agreement
+// along with this program; if not, write to Talend SA
+// 9 rue Pages 92150 Suresnes, France
+//
+// ============================================================================
 package com.amalto.workbench.utils;
 
 import static org.junit.Assert.assertEquals;
@@ -12,11 +24,11 @@ import org.mockito.ArgumentMatchers;
 import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
-import org.talend.utils.security.CryptoMigrationUtil;
+import org.talend.utils.security.StudioEncryption;
 
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest({ PasswordUtil.class, CryptoMigrationUtil.class })
+@PrepareForTest({ PasswordUtil.class, StudioEncryption.class })
 public class PasswordUtilTest {
 
     @Test
@@ -58,12 +70,24 @@ public class PasswordUtilTest {
 
         //
         algorithm = PasswordUtil.ALGORITHM_COMMON_V2;
-        PowerMockito.mockStatic(CryptoMigrationUtil.class);
-        CryptoMigrationUtil mockCryptoHelper = PowerMockito.mock(CryptoMigrationUtil.class);
-        String decryptPassword_expect2 = decryptPassword_expect + "2"; //$NON-NLS-1$
-        PowerMockito.when(mockCryptoHelper.decrypt(anyString())).thenReturn(decryptPassword_expect2);
         decryptPassword = PasswordUtil.decryptPassword(encodedPassword, algorithm);
-        assertEquals(decryptPassword_expect2, decryptPassword);
+        assertNull(decryptPassword);
+
+        //
+        algorithm = PasswordUtil.ALGORITHM_COMMON_V3;
+        String decryptPassword_expect3 = decryptPassword_expect + "3"; //$NON-NLS-1$
+        PowerMockito.mockStatic(StudioEncryption.class);
+        StudioEncryption mockStudioEncryption = PowerMockito.mock(StudioEncryption.class);
+        try {
+            PowerMockito
+                    .when(StudioEncryption
+                            .getStudioEncryption(ArgumentMatchers.any(StudioEncryption.EncryptionKeyName.class)))
+                    .thenReturn(mockStudioEncryption);
+        } catch (Exception e) {
+        }
+        PowerMockito.when(mockStudioEncryption.decrypt(anyString())).thenReturn(decryptPassword_expect3);
+        decryptPassword = PasswordUtil.decryptPassword(encodedPassword, algorithm);
+        assertEquals(decryptPassword_expect3, decryptPassword);
     }
 
     @Test
@@ -113,12 +137,23 @@ public class PasswordUtilTest {
 
         //
         algorithm = PasswordUtil.ALGORITHM_COMMON_V2;
-        PowerMockito.mockStatic(CryptoMigrationUtil.class);
-        CryptoMigrationUtil mockCryptoHelper = PowerMockito.mock(CryptoMigrationUtil.class);
-        String encryptedPassword_expect2 = encryptedPassword_expect + "2"; //$NON-NLS-1$
-        PowerMockito.when(mockCryptoHelper.encrypt(anyString())).thenReturn(encryptedPassword_expect2);
         encryptedPassword = PasswordUtil.encryptPassword(plainPassword, algorithm);
-        assertEquals(encryptedPassword_expect2, encryptedPassword);
+        assertNull(encryptedPassword);
+
+        //
+        algorithm = PasswordUtil.ALGORITHM_COMMON_V3;
+        String encryptedPassword_expect3 = encryptedPassword_expect + "3"; //$NON-NLS-1$
+        PowerMockito.mockStatic(StudioEncryption.class);
+        StudioEncryption mockStudioEncryption = PowerMockito.mock(StudioEncryption.class);
+        try {
+            PowerMockito
+                    .when(StudioEncryption.getStudioEncryption(ArgumentMatchers.any(StudioEncryption.EncryptionKeyName.class)))
+                    .thenReturn(mockStudioEncryption);
+        } catch (Exception e) {
+        }
+        PowerMockito.when(mockStudioEncryption.encrypt(anyString())).thenReturn(encryptedPassword_expect3);
+        encryptedPassword = PasswordUtil.encryptPassword(plainPassword, algorithm);
+        assertEquals(encryptedPassword_expect3, encryptedPassword);
     }
 
     @Test
