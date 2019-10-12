@@ -41,12 +41,6 @@ public class UnifyPasswordEncryption4MDMServerDefMigrationTask extends UnifyPass
     }
 
     @Override
-    public String getId() {
-        // change the task id to distinguish old stale task that had already executed
-        return super.getId() + "2019-10-10";
-    }
-
-    @Override
     public Date getOrder() {
         GregorianCalendar gc = new GregorianCalendar(2019, 10, 10, 12, 0, 0);
         return gc.getTime();
