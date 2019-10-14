@@ -59,8 +59,7 @@ public class UnifyPasswordEncryption4MDMServerDefMigrationTask extends UnifyPass
                     } catch (Exception e) {
                         return ExecutionResult.FAILURE;
                     }
-                }
-                if (algorithm.equals(PasswordUtil.ALGORITHM_COMMON_V2)) {
+                } else if (algorithm.equals(PasswordUtil.ALGORITHM_COMMON_V2)) {
                     try {
                         decryptedPassword = CryptoMigrationUtil.decrypt(serverDef.getPasswd());
                     } catch (Exception e) {
