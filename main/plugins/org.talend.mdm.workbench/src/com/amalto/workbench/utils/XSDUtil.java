@@ -12,20 +12,31 @@
 // ============================================================================
 package com.amalto.workbench.utils;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.eclipse.emf.common.util.EList;
 import org.eclipse.xsd.XSDAnnotation;
 import org.eclipse.xsd.XSDComplexTypeContent;
 import org.eclipse.xsd.XSDComplexTypeDefinition;
+import org.eclipse.xsd.XSDConcreteComponent;
 import org.eclipse.xsd.XSDElementDeclaration;
 import org.eclipse.xsd.XSDIdentityConstraintDefinition;
 import org.eclipse.xsd.XSDModelGroup;
@@ -37,17 +48,30 @@ import org.eclipse.xsd.XSDSimpleTypeDefinition;
 import org.eclipse.xsd.XSDTerm;
 import org.eclipse.xsd.XSDTypeDefinition;
 import org.eclipse.xsd.XSDXPathDefinition;
+import org.eclipse.xsd.util.XSDParser;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 import com.amalto.workbench.dialogs.datamodel.IXPathSelectionFilter;
 import com.amalto.workbench.dialogs.datamodel.IXPathSelectionFilter.FilterResult;
+import com.amalto.workbench.i18n.Messages;
+import com.amalto.workbench.models.IAnnotationConst;
 
 /**
  * DOC hbhong class global comment. Detailled comment
  */
 public class XSDUtil {
+
+    private static final String FIELD = "field";
+
+    private static final String NAME = "name";
+
+    private static final Log LOG = LogFactory.getLog(XSDUtil.class);
+
+    private static final String SOURCE = "source";
+
+    private static final String APPINFO = "appinfo";
 
     private static final String X_FOREIGN_KEY = "X_ForeignKey"; //$NON-NLS-1$
 
@@ -63,8 +87,8 @@ public class XSDUtil {
             EList<Element> applicationInformation = annotation.getApplicationInformation();
             if (applicationInformation != null) {
                 for (Element element : applicationInformation) {
-                    if (element.getLocalName().equalsIgnoreCase("appinfo")) { //$NON-NLS-1$
-                        String source = element.getAttribute("source"); //$NON-NLS-1$
+                    if (element.getLocalName().equalsIgnoreCase(APPINFO)) {
+                        String source = element.getAttribute(SOURCE);
                         if (key.equalsIgnoreCase(source)) {
                             NodeList childNodes = element.getChildNodes();
                             String nodeValue = null;
@@ -207,7 +231,7 @@ public class XSDUtil {
         Map<XSDElementDeclaration, List<XSDComplexTypeDefinition>> entityMapComplexTypes = buildEntityUsedComplexTypeMap(schema);
 
         Iterator<XSDElementDeclaration> iterator = entityMapComplexTypes.keySet().iterator();
-        while(iterator.hasNext()) {
+        while (iterator.hasNext()) {
             XSDElementDeclaration concept = iterator.next();
             List<XSDComplexTypeDefinition> ctypes = entityMapComplexTypes.get(concept);
             for (XSDComplexTypeDefinition ctype : ctypes) {
@@ -228,7 +252,7 @@ public class XSDUtil {
         return false;
     }
 
-    public static Map<XSDElementDeclaration,List<XSDComplexTypeDefinition>> buildEntityUsedComplexTypeMap(XSDSchema schema) {
+    public static Map<XSDElementDeclaration, List<XSDComplexTypeDefinition>> buildEntityUsedComplexTypeMap(XSDSchema schema) {
         Map<XSDElementDeclaration, List<XSDComplexTypeDefinition>> entityMapComplexType = new HashMap<XSDElementDeclaration, List<XSDComplexTypeDefinition>>();
 
         EList<XSDSchemaContent> contents = schema.getContents();
@@ -265,16 +289,16 @@ public class XSDUtil {
     }
 
     public static boolean isPrimaryKeyElement(XSDParticle particle) {
-        if(isSimpleTypeElement(particle)) {
+        if (isSimpleTypeElement(particle)) {
             Map<XSDElementDeclaration, List<XSDComplexTypeDefinition>> entityMapComplexTypes = buildEntityUsedComplexTypeMap(
                     (XSDSchema) particle.getRootContainer());
 
             Iterator<XSDElementDeclaration> iterator = entityMapComplexTypes.keySet().iterator();
-            while(iterator.hasNext()) {
+            while (iterator.hasNext()) {
                 XSDElementDeclaration concept = iterator.next();
-                List<String> keyFields  = getKeyFields(concept);
+                List<String> keyFields = getKeyFields(concept);
 
-                if(keyFields.contains(((XSDElementDeclaration)particle.getTerm()).getName())) {
+                if (keyFields.contains(((XSDElementDeclaration) particle.getTerm()).getName())) {
                     List<XSDComplexTypeDefinition> ctypes = entityMapComplexTypes.get(concept);
                     for (XSDComplexTypeDefinition ctype : ctypes) {
                         XSDComplexTypeContent ctypeContent = ctype.getContent();
@@ -283,7 +307,7 @@ public class XSDUtil {
                             XSDParticleContent particleContent = typeParticle.getContent();
                             if (particleContent instanceof XSDModelGroup) {
                                 XSDModelGroup particleGroup = (XSDModelGroup) particleContent;
-                                if(particleGroup.getContents().contains(particle)) {
+                                if (particleGroup.getContents().contains(particle)) {
                                     return true;
                                 }
                             }
@@ -301,15 +325,49 @@ public class XSDUtil {
         List<String> keyFields = new ArrayList<String>();
 
         EList<XSDIdentityConstraintDefinition> identityConstraintDefinitions = concept.getIdentityConstraintDefinitions();
-        for(XSDIdentityConstraintDefinition icd:identityConstraintDefinitions) {
-            if(concept.getName().equals(icd.getName())) {
+        for (XSDIdentityConstraintDefinition icd : identityConstraintDefinitions) {
+            if (concept.getName().equals(icd.getName())) {
                 EList<XSDXPathDefinition> fields = icd.getFields();
-                for(XSDXPathDefinition xpathdef:fields) {
+                for (XSDXPathDefinition xpathdef : fields) {
                     keyFields.add(xpathdef.getValue());
                 }
             }
         }
         return keyFields;
+    }
+
+    /**
+     * Find all first level fields for the entity
+     * 
+     * @param concept Entity XSD object
+     * @return List<String> object which includes the field's name.
+     */
+    public static List<String> getFields(XSDElementDeclaration concept) {
+        XSDComplexTypeDefinition complexType = (XSDComplexTypeDefinition) concept.getType();
+        List<String> fields = getFields(complexType);
+        return fields;
+    }
+
+    private static List<String> getFields(XSDComplexTypeDefinition complexType) {
+        List<String> fields = new ArrayList<String>();
+        XSDModelGroup term = (XSDModelGroup) ((XSDParticle) complexType.getContent()).getTerm();
+        for (XSDParticle elementParticle : term.getContents()) {
+            XSDParticleContent content = elementParticle.getContent();
+            if (content instanceof XSDElementDeclaration) {
+                XSDElementDeclaration field = (XSDElementDeclaration) content;
+                if (field.getName() != null && field.getType() != null) {
+                    fields.add(field.getName());
+                }
+            }
+        }
+        XSDTypeDefinition baseType = complexType.getBaseTypeDefinition();
+        if (baseType != null && baseType != complexType && baseType instanceof XSDComplexTypeDefinition) {
+            List<String> parentFields = getFields((XSDComplexTypeDefinition) baseType);
+            if (parentFields != null) {
+                fields.addAll(parentFields);
+            }
+        }
+        return fields;
     }
 
     public static List<String> getAllPKXpaths(XSDSchema schema) {
@@ -329,6 +387,81 @@ public class XSDUtil {
         }
 
         return entity2xpaths;
+    }
+
+    public static XSDComplexTypeDefinition getContainerTypeOfField(XSDParticle field) {
+        if (field == null) {
+            return null;
+        }
+
+        XSDConcreteComponent modelGroup = field.getContainer();
+        XSDConcreteComponent particle = modelGroup.getContainer();
+        XSDConcreteComponent complexType = particle.getContainer();
+        XSDComplexTypeDefinition complexTypedef = (XSDComplexTypeDefinition) complexType;
+
+        return complexTypedef;
+    }
+
+    /**
+     * check if <b>ctypeDef</b> has been used for <b>concept</b>'s type (concept.getTypeDefinition())
+     */
+    public static boolean hasBoundToConcept(XSDComplexTypeDefinition ctypeDef, XSDElementDeclaration concept) {
+        XSDComplexTypeDefinition typeDefinition = (XSDComplexTypeDefinition) concept.getTypeDefinition();
+        if (typeDefinition == ctypeDef) {
+            return true;
+        }
+
+        if (!isAnonymousType(ctypeDef) && !isAnonymousType(typeDefinition)) {
+            List<XSDComplexTypeDefinition> superComplexTypes = Util.getAllSuperComplexTypes(typeDefinition);
+            if (superComplexTypes.contains(ctypeDef)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static boolean isAnonymousType(XSDTypeDefinition typedef) {
+        if (typedef instanceof XSDComplexTypeDefinition) {
+            return ((XSDComplexTypeDefinition) typedef).getName() == null;
+        }
+
+        return false;
+    }
+
+    /*
+     * search the entities that own the 'field' as 1-level children
+     */
+    public static List<XSDElementDeclaration> getConceptsOfField(XSDParticle field) {
+        List<XSDElementDeclaration> conceptsOfField = new ArrayList<>();
+
+        XSDSchema schema = field.getSchema();
+        XSDComplexTypeDefinition typedef = XSDUtil.getContainerTypeOfField(field);
+        List<XSDElementDeclaration> concepts = schema.getElementDeclarations();
+        for (XSDElementDeclaration concept : concepts) {
+            if (XSDUtil.hasBoundToConcept(typedef, concept)) {
+                conceptsOfField.add(concept);
+            }
+        }
+
+        return conceptsOfField;
+    }
+
+    public static void syncEntityCategoryAnnotation(XSDElementDeclaration conceptOfPariticle, String oldFieldName,
+            String newFieldName) {
+        Objects.requireNonNull(oldFieldName);
+
+        XSDAnnotationsStructure annoStructure = new XSDAnnotationsStructure(conceptOfPariticle);
+        Map<String, String> fieldCategoryMap = annoStructure.getFieldCategoryMap();
+        if (StringUtils.isBlank(newFieldName)) {
+            fieldCategoryMap.remove(oldFieldName);
+            annoStructure.setCategoryFields(fieldCategoryMap);
+        } else if (!oldFieldName.equals(newFieldName)) {
+            String category = fieldCategoryMap.get(oldFieldName);
+            fieldCategoryMap.remove(oldFieldName);
+            fieldCategoryMap.put(newFieldName, category);
+            annoStructure.setCategoryFields(fieldCategoryMap);
+        }
     }
 
     public static boolean isValidatedXSDDate(String newText) {
@@ -374,5 +507,102 @@ public class XSDUtil {
         Pattern pattern = Pattern.compile(regex);
         boolean match = pattern.matcher(newText).matches();
         return match;
+    }
+
+    private static String validateCategory(XSDElementDeclaration elementDesc) {
+        XSDAnnotation annotation = elementDesc.getAnnotation();
+        if (annotation != null) {
+            String entityName = elementDesc.getName();
+            List<String> categoryNames = new ArrayList<>();
+            List<List<String>> allFields = new ArrayList<>();
+            for (Element element : annotation.getApplicationInformation()) {
+                String name = element.getLocalName();
+                if (APPINFO.equals(name.toLowerCase())) {
+                    name = element.getAttribute(SOURCE);
+                    if (name.equals(IAnnotationConst.KEY_CATEGORY)) {
+                        NodeList childNodes = element.getChildNodes();
+                        List<String> fields = new ArrayList<>();
+                        String categoryName = null;
+                        for (int i = 0; i < childNodes.getLength(); i++) {
+                            Node node = childNodes.item(i);
+                            String localName = node.getLocalName();
+                            if (localName != null) {
+                                Node subChild = node.getFirstChild();
+                                if (subChild != null) {
+                                    String nodeValue = subChild.getNodeValue();
+                                    if (nodeValue != null) {
+                                        if (localName.equalsIgnoreCase(NAME)) {
+                                            categoryName = nodeValue;
+                                        } else if (localName.equalsIgnoreCase(FIELD) && nodeValue != null) {
+                                            fields.add(nodeValue);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if (StringUtils.isEmpty(categoryName)) {
+                            return Messages.bind(Messages.XSDUtil_emptyCategoryName, entityName);
+                        } else {
+                            // check duplicated category name
+                            if (categoryNames.contains(categoryName)) {
+                                return Messages.bind(Messages.XSDUtil_duplicatedCategoryName, entityName, categoryName);
+                            } else {
+                                categoryNames.add(categoryName);
+                            }
+                            // check duplicated
+                            for (int i = 0; i < fields.size(); i++) {
+                                String fieldName = fields.get(i);
+                                if (fields.lastIndexOf(fieldName) != i) {
+                                    return Messages.bind(Messages.XSDUtil_duplicatedElementInSameCatetory, categoryName, fieldName,
+                                            entityName);
+                                }
+                            }
+                            for (String fieldName : fields) {
+                                for (int i = 0; i < allFields.size(); i++) {
+                                    if (allFields.get(i).contains(fieldName)) {
+                                        return Messages.bind(Messages.XSDUtil_duplicatedElementInDifferentCatetory, fieldName, categoryName,
+                                                categoryNames.get(i), entityName);
+                                    }
+                                }
+                            }
+                            allFields.add(fields);
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    public static Map<String, String> validateCategory(XSDSchema schema) {
+        if (schema != null) {
+            for (XSDElementDeclaration elementDesc : schema.getElementDeclarations()) {
+                String error = validateCategory(elementDesc);
+                if (error != null) {
+                    return Collections.singletonMap(elementDesc.getName(), error);
+                }
+            }
+        }
+        return null;
+    }
+
+    public static Map<String, String> validateCategory(File file) {
+        FileInputStream inputStream = null;
+        try {
+            inputStream = new FileInputStream(file);
+            return validateCategory(inputStream);
+        } catch (IOException ex) {
+            LOG.error("Fail in parsing XSD file:", ex);
+        } finally {
+            IOUtils.closeQuietly(inputStream);
+        }
+        return null;
+    }
+
+    public static Map<String, String> validateCategory(InputStream inputStream) {
+        XSDParser parser = new XSDParser(null);
+        parser.parse(inputStream);
+        XSDSchema schema = parser.getSchema();
+        return validateCategory(schema);
     }
 }

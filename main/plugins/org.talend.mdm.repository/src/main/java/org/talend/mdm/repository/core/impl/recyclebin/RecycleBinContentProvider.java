@@ -21,6 +21,8 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.collections.PredicateUtils;
 import org.apache.log4j.Logger;
 import org.eclipse.core.resources.IFolder;
 import org.eclipse.core.resources.IProject;
@@ -80,6 +82,7 @@ public class RecycleBinContentProvider extends AbstractContentProvider {
     private void buildAllDeletedFolders(FolderRepositoryObject rootViewObj) {
         Project currentProject = ProjectManager.getInstance().getCurrentProject();
         List<String> paths = currentProject.getEmfProject().getDeletedFolders();
+        CollectionUtils.filter(paths, PredicateUtils.notNullPredicate());
         String[] deletedFolderPaths = sortFolderPath(paths);
         containerMap.clear();
         rootViewObj.getChildren().clear();

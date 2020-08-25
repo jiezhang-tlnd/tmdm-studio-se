@@ -101,7 +101,7 @@ public class ServerDefDialog extends TitleAreaDialog {
             newName = serverDef.getName();
         } else {
             this.serverDef = MdmmetadataFactory.eINSTANCE.createMDMServerDef();
-            this.serverDef.setAlgorithm(PasswordUtil.ALGORITHM_COMMON_V2);
+            this.serverDef.setAlgorithm(PasswordUtil.ALGORITHM_COMMON_V3);
         }
     }
 
@@ -274,7 +274,7 @@ public class ServerDefDialog extends TitleAreaDialog {
             }
 
             MDMServerDef tmpServerDef = MdmmetadataFactory.eINSTANCE.createMDMServerDef();
-            tmpServerDef.setAlgorithm(PasswordUtil.ALGORITHM_COMMON_V2);
+            tmpServerDef.setAlgorithm(PasswordUtil.ALGORITHM_COMMON_V3);
             updateUI2Model(tmpServerDef);
 
             try {

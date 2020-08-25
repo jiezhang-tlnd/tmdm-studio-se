@@ -12,12 +12,14 @@
 // ============================================================================
 package com.amalto.workbench.actions;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Status;
+import org.eclipse.emf.common.util.EList;
 import org.eclipse.jface.dialogs.MessageDialog;
 import org.eclipse.jface.viewers.ISelection;
 import org.eclipse.jface.viewers.IStructuredSelection;
@@ -33,7 +35,7 @@ import com.amalto.workbench.editors.DataModelMainPage;
 import com.amalto.workbench.i18n.Messages;
 import com.amalto.workbench.image.EImage;
 import com.amalto.workbench.image.ImageCache;
-import com.amalto.workbench.utils.Util;
+import com.amalto.workbench.utils.XSDUtil;
 import com.amalto.workbench.utils.XtentisException;
 
 public class XSDDeleteParticleAction extends UndoAction {
@@ -79,37 +81,22 @@ public class XSDDeleteParticleAction extends UndoAction {
                 return Status.CANCEL_STATUS;
             }
 
-            XSDIdentityConstraintDefinition identify = null;
-            XSDXPathDefinition keyPath = null;
-            List<Object> keyInfo = Util.getKeyInfo(decl);
-            if (keyInfo != null && keyInfo.size() > 0) {
-                identify = (XSDIdentityConstraintDefinition) keyInfo.get(0);
-                keyPath = (XSDXPathDefinition) keyInfo.get(1);
-                identify.getFields().remove(keyPath);
-                if (identify.getFields().size() == 0) {
-                    XSDElementDeclaration top = (XSDElementDeclaration) Util.getParent(decl);
-                    top.getIdentityConstraintDefinitions().remove(identify);
-                }
+            if (!(particle.getContainer() instanceof XSDModelGroup)) {
+                throw new XtentisException(Messages.bind(Messages.XSDDeleteParticleAction_ExceptionInfo,
+                        particle.getContainer().getClass().getName()));
             }
-            if (!(particle.getContainer() instanceof XSDModelGroup))
-                throw new XtentisException(Messages.bind(Messages.XSDDeleteParticleAction_ExceptionInfo, particle.getContainer().getClass().getName()));
+
+            List<XSDElementDeclaration> concepts = XSDUtil.getConceptsOfField(particle);
+            for (XSDElementDeclaration concept : concepts) {
+                removePK(concept, decl);
+                XSDUtil.syncEntityCategoryAnnotation(concept, decl.getName(), null);
+                concept.updateElement();
+            }
 
             XSDModelGroup group = (XSDModelGroup) particle.getContainer();
             group.getContents().remove(particle);
-
-            // if (term instanceof XSDElementDeclaration) {
-            // //remove type definition is no more used and type is not built in
-            // XSDTypeDefinition typeDef = decl.getTypeDefinition();
-            // if ( (typeDef.getName()!=null) && //anonymous type
-            // (!typeDef.getSchema().getSchemaForSchemaNamespace().equals(typeDef.getTargetNamespace()))
-            // ){
-            // if (Util.findElementsUsingType(group.getSchema(),typeDef.getTargetNamespace(),
-            // typeDef.getName()).size()==0)
-            // group.getSchema().getContents().remove(typeDef);
-            // }
-            // }
-
             group.updateElement();
+
             xsdPartle = null;
             page.refresh();
             page.markDirty();
@@ -121,6 +108,33 @@ public class XSDDeleteParticleAction extends UndoAction {
             return Status.CANCEL_STATUS;
         }
         return Status.OK_STATUS;
+    }
+
+    private void removePK(XSDElementDeclaration concept, XSDElementDeclaration field) {
+        XSDIdentityConstraintDefinition identify = null;
+        XSDXPathDefinition keyPath = null;
+
+        List<Object> keyInfo = new ArrayList<>();
+        EList<XSDIdentityConstraintDefinition> idtylist = concept.getIdentityConstraintDefinitions();
+        for (XSDIdentityConstraintDefinition idty : idtylist) {
+            EList<XSDXPathDefinition> fields = idty.getFields();
+            for (XSDXPathDefinition path : fields) {
+                if ((path.getValue()).equals(field.getName())) {
+                    keyInfo.add(idty);
+                    keyInfo.add(path);
+                    break;
+                }
+            }
+        }
+
+        if (keyInfo != null && keyInfo.size() > 0) {
+            identify = (XSDIdentityConstraintDefinition) keyInfo.get(0);
+            keyPath = (XSDXPathDefinition) keyInfo.get(1);
+            identify.getFields().remove(keyPath);
+            if (identify.getFields().size() == 0) {
+                concept.getIdentityConstraintDefinitions().remove(identify);
+            }
+        }
     }
 
     public void runWithEvent(Event event) {

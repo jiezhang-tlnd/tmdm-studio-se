@@ -2,14 +2,14 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
 Bundle-Name: org.talend.mdm.repository.test
 Bundle-SymbolicName: org.talend.mdm.repository.test
-Bundle-Version: 7.3.1.qualifier
+Bundle-Version: 7.4.1.qualifier
 Fragment-Host: org.talend.mdm.repository
 Require-Bundle: org.talend.testutils,
  org.hamcrest,
  org.eclipse.osgi.services,
  org.apache.commons.lang
 Bundle-ClassPath: .,
- META-INF/libs/xstream-1.4.10.jar
+ META-INF/libs/xstream-1.4.12.jar
 Export-Package: org.talend.mdm.repository.ui.actions,
  org.talend.mdm.repository.ui.actions.datacontainer,
  org.talend.mdm.repository.ui.actions.datamodel,

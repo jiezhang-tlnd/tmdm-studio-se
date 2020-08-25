@@ -59,6 +59,10 @@ import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import javax.xml.ws.BindingProvider;
 import javax.xml.ws.WebServiceException;
+import javax.xml.xpath.XPath;
+import javax.xml.xpath.XPathConstants;
+import javax.xml.xpath.XPathExpression;
+import javax.xml.xpath.XPathFactory;
 
 import org.apache.commons.collections.map.MultiKeyMap;
 import org.apache.commons.io.IOUtils;
@@ -129,11 +133,13 @@ import org.eclipse.xsd.util.XSDConstants;
 import org.eclipse.xsd.util.XSDSchemaLocator;
 import org.osgi.framework.Bundle;
 import org.talend.core.GlobalServiceRegister;
+import org.talend.core.service.IMDMWebServiceHook;
 import org.talend.mdm.commmon.util.core.EUUIDCustomType;
 import org.talend.mdm.commmon.util.core.ICoreConstants;
 import org.talend.mdm.commmon.util.webapp.XSystemObjects;
 import org.talend.mdm.commmon.util.workbench.Version;
 import org.talend.mdm.commmon.util.workbench.ZipToFile;
+import org.talend.utils.io.FilesUtils;
 import org.talend.utils.xml.XmlUtils;
 import org.w3c.dom.DOMImplementation;
 import org.w3c.dom.Document;
@@ -151,7 +157,6 @@ import com.amalto.workbench.image.ImageCache;
 import com.amalto.workbench.models.TreeObject;
 import com.amalto.workbench.models.TreeObjectTransfer;
 import com.amalto.workbench.models.TreeParent;
-import com.amalto.workbench.service.IWebServiceHook;
 import com.amalto.workbench.service.MissingJarService;
 import com.amalto.workbench.service.MissingJarsException;
 import com.amalto.workbench.webservices.TMDMService;
@@ -173,8 +178,6 @@ import com.amalto.workbench.webservices.WSVersion;
 import com.amalto.workbench.webservices.WSViewPK;
 import com.amalto.workbench.webservices.WSWhereCondition;
 import com.amalto.workbench.webservices.WSWhereOperator;
-import com.sun.org.apache.xpath.internal.XPathAPI;
-import com.sun.org.apache.xpath.internal.objects.XObject;
 import com.sun.xml.ws.wsdl.parser.InaccessibleWSDLException;
 
 /**
@@ -346,7 +349,7 @@ public class Util {
 
     public static String default_endpoint_address = "http://localhost:8180/talendmdm/services/soap";//$NON-NLS-1$
 
-    private static IWebServiceHook webServceHook;
+    private static IMDMWebServiceHook webServceHook;
 
     /*********************************************************************
      * WEB SERVICES
@@ -399,7 +402,11 @@ public class Util {
                 throw new MissingJarsException("Missing dependency libraries."); //$NON-NLS-1$
             }
 
+            ClassLoader oldContextClassLoader = Thread.currentThread().getContextClassLoader();
             try {
+                //
+                Thread.currentThread().setContextClassLoader(TMDMService_Service.class.getClassLoader());
+
                 TMDMService_Service service_service = new TMDMService_Service(url);
 
                 service = service_service.getTMDMPort();
@@ -417,9 +424,9 @@ public class Util {
                 context.put(BindingProvider.USERNAME_PROPERTY, username);
                 context.put(BindingProvider.PASSWORD_PROPERTY, password);
 
-                IWebServiceHook wsHook = getWebServiceHook();
+                IMDMWebServiceHook wsHook = getWebServiceHook();
                 if (wsHook != null) {
-                    wsHook.preRequestSendingHook(stub, username);
+                    wsHook.preRequestSendingHook(stub.getRequestContext(), username);
                 }
 
                 cachedMDMService.put(url, username, password, service);
@@ -429,6 +436,8 @@ public class Util {
                 if (ex != null) {
                     throw ex;
                 }
+            } finally {
+                Thread.currentThread().setContextClassLoader(oldContextClassLoader);
             }
 
         }
@@ -489,9 +498,9 @@ public class Util {
         return wsEx;
     }
 
-    public static IWebServiceHook getWebServiceHook() {
-        if (webServceHook == null && GlobalServiceRegister.getDefault().isServiceRegistered(IWebServiceHook.class)) {
-            webServceHook = GlobalServiceRegister.getDefault().getService(IWebServiceHook.class);
+    public static IMDMWebServiceHook getWebServiceHook() {
+        if (webServceHook == null && GlobalServiceRegister.getDefault().isServiceRegistered(IMDMWebServiceHook.class)) {
+            webServceHook = GlobalServiceRegister.getDefault().getService(IMDMWebServiceHook.class);
         }
         return webServceHook;
     }
@@ -642,7 +651,7 @@ public class Util {
      * @throws Exception
      */
     public static NodeList getNodeList(Document d, String xPath) throws Exception {
-        return getNodeList(d.getDocumentElement(), xPath, null, null);
+        return getNodeList(d.getDocumentElement(), xPath);
     }
 
     /**
@@ -651,21 +660,12 @@ public class Util {
      * @throws Exception
      */
     public static NodeList getNodeList(Node contextNode, String xPath) throws Exception {
-        return getNodeList(contextNode, xPath, null, null);
-    }
+        XPathFactory factory = XPathFactory.newInstance();
+        factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+        XPath xpath = factory.newXPath();
+        XPathExpression expr = xpath.compile(xPath);
 
-    /**
-     * Get a nodelist from an xPath
-     *
-     * @throws Exception
-     */
-    public static NodeList getNodeList(Node contextNode, String xPath, String namespace, String prefix) throws Exception {
-        XObject xo = XPathAPI.eval(contextNode, xPath,
-                (namespace == null) ? contextNode : Util.getRootElement("nsholder", namespace, prefix));//$NON-NLS-1$
-        if (xo.getType() != XObject.CLASS_NODESET) {
-            return null;
-        }
-        return xo.nodelist();
+        return (NodeList) expr.evaluate(contextNode, XPathConstants.NODESET);
     }
 
     /**
@@ -739,10 +739,6 @@ public class Util {
     }
 
     public static String[] getTextNodes(Node contextNode, String xPath) throws XtentisException {
-        return getTextNodes(contextNode, xPath, contextNode);
-    }
-
-    public static String[] getTextNodes(Node contextNode, String xPath, Node namespaceNode) throws XtentisException {
         String[] results = null;
 
         // test for hard-coded values
@@ -758,17 +754,12 @@ public class Util {
         }
 
         try {
-            XObject xo = XPathAPI.eval(contextNode, xPath, namespaceNode);
-            if (xo.getType() == XObject.CLASS_NODESET) {
-                NodeList l = xo.nodelist();
-                int len = l.getLength();
-                results = new String[len];
-                for (int i = 0; i < len; i++) {
-                    Node n = l.item(i);
-                    results[i] = n.getNodeValue();
-                }
-            } else {
-                results = new String[] { xo.toString() };
+            NodeList nodeList = getNodeList(contextNode, xPath);
+            int len = nodeList.getLength();
+            results = new String[len];
+            for (int i = 0; i < len; i++) {
+                Node n = nodeList.item(i);
+                results[i] = n.getNodeValue();
             }
         } catch (Exception e) {
             String err = Messages.Util_18 + xPath + Messages.Util_19 + e.getClass().getName() + Messages.Util_20
@@ -776,19 +767,14 @@ public class Util {
             throw new XtentisException(err);
         }
         return results;
-
     }
 
-    public static String getFirstTextNode(Node contextNode, String xPath, Node namespaceNode) throws XtentisException {
-        String[] res = getTextNodes(contextNode, xPath, namespaceNode);
+    public static String getFirstTextNode(Node contextNode, String xPath) throws XtentisException {
+        String[] res = getTextNodes(contextNode, xPath);
         if (res.length == 0) {
             return null;
         }
         return res[0];
-    }
-
-    public static String getFirstTextNode(Node contextNode, String xPath) throws XtentisException {
-        return getFirstTextNode(contextNode, xPath, contextNode);
     }
 
     /*********************************************************************
@@ -3487,16 +3473,21 @@ public class Util {
     public static void unZipFile(String zipfile, String unzipdir, int totalProgress, IProgressMonitor monitor)
             throws IOException {
         monitor.setTaskName(Messages.Util_50);
+
         File unzipF = new File(unzipdir);
         if (!unzipF.exists()) {
             unzipF.mkdirs();
         }
+        unzipdir = unzipdir.replace('\\', '/');
+        if (!unzipdir.endsWith("/")) { //$NON-NLS-1$
+            unzipdir = unzipdir + "/"; //$NON-NLS-1$
+        }
+
         ZipFile zfile = null;
 
         try {
             zfile = new ZipFile(zipfile);
             int total = zfile.size();
-            // System.out.println("zip's entry size:"+total);
             int interval, step;
             if (totalProgress / total > 0) {
                 interval = 1;
@@ -3511,17 +3502,16 @@ public class Util {
             int tmp = 1;
             while (zList.hasMoreElements()) {
                 ze = (ZipEntry) zList.nextElement();
+                String filename = unzipdir + ze.getName();
+                FilesUtils.validateDestPath(unzipdir, filename);
+
                 monitor.subTask(ze.getName());
                 if (ze.isDirectory()) {
                     File f = new File(unzipdir + ze.getName());
                     f.mkdirs();
                     continue;
                 }
-                unzipdir = unzipdir.replace('\\', '/');
-                if (!unzipdir.endsWith("/")) { //$NON-NLS-1$
-                    unzipdir = unzipdir + "/"; //$NON-NLS-1$
-                }
-                String filename = unzipdir + ze.getName();
+
                 File zeF = new File(filename);
                 if (!zeF.getParentFile().exists()) {
                     zeF.getParentFile().mkdirs();

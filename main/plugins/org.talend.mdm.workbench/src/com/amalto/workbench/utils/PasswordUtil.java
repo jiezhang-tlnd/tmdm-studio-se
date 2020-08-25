@@ -14,39 +14,45 @@ package com.amalto.workbench.utils;
 
 import org.apache.commons.codec.binary.Base64;
 import org.apache.log4j.Logger;
-import org.talend.daikon.security.CryptoHelper;
+import org.talend.utils.security.StudioEncryption;
 
 
 public class PasswordUtil {
 
-    private static Logger log = Logger.getLogger(PasswordUtil.class);
+    private static final Logger LOGGER = Logger.getLogger(PasswordUtil.class);
 
     public static final String ALGORITHM_COMMON = "Common"; //$NON-NLS-1$
 
     public static final String ALGORITHM_COMMON_V2 = "CommonV2"; //$NON-NLS-1$
+
+    public static final String ALGORITHM_COMMON_V3 = "CommonV3"; //$NON-NLS-1$
 
     public static String decryptPassword(String encodedPassword, String algorithm) {
         if (encodedPassword == null) {
             throw new IllegalArgumentException();
         }
         if (algorithm != null) {
-            if (algorithm.equals(ALGORITHM_COMMON_V2)) {
+            if (algorithm.equals(ALGORITHM_COMMON_V3)) {
                 try {
-                    String decryptedPassword = CryptoHelper.getDefault().decrypt(encodedPassword);
-                    return decryptedPassword;
+                    return decryptPasswordAES(encodedPassword);
                 } catch (Exception e) {
-                    log.error(e.getMessage(), e);
+                    LOGGER.error(e.getMessage(), e);
+                    return null;
                 }
-            } else if (algorithm.equals(ALGORITHM_COMMON)) {
-                // not support ALGORITHM_COMMON ,it will be upgraded by migration task
+            } else if (algorithm.equals(ALGORITHM_COMMON) || algorithm.equals(ALGORITHM_COMMON_V2)) {
+                // not support ALGORITHM_COMMON and ALGORITHM_COMMON_V2 ,it will be upgraded by migration task
                 return null;
             }
         }
         return decryptPasswordBase64(encodedPassword);
     }
 
+    public static String decryptPasswordAES(String encodedPassword) {
+        return StudioEncryption.getStudioEncryption(StudioEncryption.EncryptionKeyName.SYSTEM).decrypt(encodedPassword);
+    }
+
     public static String decryptPassword(String encodedPassword) {
-        return decryptPassword(encodedPassword, ALGORITHM_COMMON_V2);
+        return decryptPassword(encodedPassword, ALGORITHM_COMMON_V3);
     }
 
     public static String decryptPasswordBase64(String encodedPassword) {
@@ -64,14 +70,15 @@ public class PasswordUtil {
             throw new IllegalArgumentException();
         }
         if (algorithm != null) {
-            if (algorithm.equals(ALGORITHM_COMMON_V2)) {
+            if (algorithm.equals(ALGORITHM_COMMON_V3)) {
                 try {
-                    return CryptoHelper.getDefault().encrypt(plainPassword);
+                    return encryptPasswordAES(plainPassword);
                 } catch (Exception e) {
-                    log.error(e.getMessage(), e);
+                    LOGGER.error(e.getMessage(), e);
+                    return null;
                 }
-            } else if (algorithm.equals(ALGORITHM_COMMON)) {
-                // not support ALGORITHM_COMMON ,it will be upgraded by migration task
+            } else if (algorithm.equals(ALGORITHM_COMMON) || algorithm.equals(ALGORITHM_COMMON_V2)) {
+                // not support ALGORITHM_COMMON and ALGORITHM_COMMON_V2,it will be upgraded by migration task
                 return null;
             }
         }
@@ -80,8 +87,13 @@ public class PasswordUtil {
 
     }
 
+    public static String encryptPasswordAES(String plainPassword) {
+        return StudioEncryption.getStudioEncryption(StudioEncryption.EncryptionKeyName.SYSTEM)
+                .encrypt(plainPassword);
+    }
+
     public static String encryptPassword(String plainPassword) {
-        return encryptPassword(plainPassword, ALGORITHM_COMMON_V2);
+        return encryptPassword(plainPassword, ALGORITHM_COMMON_V3);
     }
 
     public static String encryptPasswordBase64(String plainPassword) {
@@ -91,21 +103,5 @@ public class PasswordUtil {
         enbytes = base64.encode(plainPassword.getBytes());
         encodeStr = new String(enbytes);
         return encodeStr;
-    }
-
-    public static void main(String args[]) {
-        Base64 base64 = new Base64();
-        String str = "qwe";//$NON-NLS-1$
-        byte[] enbytes = null;
-        String encodeStr = null;
-        byte[] debytes = null;
-        String decodeStr = null;
-        enbytes = base64.encode(str.getBytes());
-        encodeStr = new String(enbytes);
-        debytes = base64.decode(enbytes);
-        decodeStr = new String(debytes);
-        System.out.println("plain password:" + str); //$NON-NLS-1$
-        System.out.println("encrypted password:" + encodeStr); //$NON-NLS-1$
-        System.out.println("decrypted password:" + decodeStr); //$NON-NLS-1$
     }
 }
